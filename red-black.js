@@ -1,46 +1,70 @@
 /*
+ *
+ * @name RED IS THE NEW BLACK
+ * @homeapge https://github.com/JacksonGariety/red-is-the-new-black
+ * @author Jackson Gariety (jacksongariety.com)
+ * @version 0.0.1
+ * @license MIT
+ * A red-black tree implementation in pure JavaScript
+ *   - It's a self-balancing binary tree!
+ *   - It has no dependencies! (fuck underscore.js)
+ *   - It's annotated!
+ *   - It has a minified dist!
+ *
+ */
+
+/*
  * Node
  */
 
+// The Node class
 function RedBlackNode(key, value) {
-  this.value = value
-  this.left = null
-  this.right = null
-  this.color = 'red'
-  this.parent = null
-  this.tree = null
-  this.key = key
+  this.value = value // holds value as a key/value store would, this is not sorted
+  this.left = null   // points to either a left-branching node or a leaf (null)
+  this.right = null  // points to either a right-branch not or a leaf (null)
+  this.color = 'red' // the color of the node, used for balancing the tree
+  this.parent = null // a pointer to the parent node
+  this.tree = null   // a pointer to the tree which owns the node
+  this.key = key     // holds the key as a key/value store would, this is sorted
 }
 
+// Points to sibling node, doesn't care wether
+// it's left or right.
 RedBlackNode.prototype.sibling = function () {
   return this.parent? this === this.parent.left ? this.parent.right : this.parent.left : null
 }
 
+// Points to the sibling of the parent node.
 RedBlackNode.prototype.uncle = function () {
   return this.parent? this.parent.silbing : null
 }
 
+// Points to the parent of the parent node.
 RedBlackNode.prototype.grandparent = function () {
   return this.parent? this.parent.parent : null
 }
 
-RedBlackNode.prototype.rotateLeft = function () {
-  var right = this.right
-  this.tree.replaceNode(node, right)
+// Updates the pointers for left-branching nodes which have just
+// been swapped by the RedBlackTree.prototype.replace function
+RedBlackNode.prototype.swapLeft = function () {
+  var right = this.right // variable is cached for later pointer update
+  this.tree.replaceNode(this, right) // swaps a node with its right branch
   
-  // Update pointers
+  // Update pointers after replacing node
   this.right = right.left
   if (right.left !== null) right.left.parent = this
   right.left = this
   this.parent = right
 }
 
-RedBlackNode.prototype.rotateRight = function () {
-  var left = this.left
-  this.tree.replaceNode(node, left)
+// Updates the pointers for right-branching nodes which have just
+// been swapped by the RedBlackTree.prototype.replace function
+RedBlackNode.prototype.swapRight = function () {
+  var left = this.left // variable is cached for later pointer update
+  this.tree.replaceNode(this, left) // swaps the node with its left branch
   
-  // Update pointers
-  node.left = left.right
+  // Update pointers after replacing node
+  this.left = left.right
   if (left.right !== null) left.right.parent = this
   left.right = this
   this.parent = left
@@ -50,14 +74,19 @@ RedBlackNode.prototype.rotateRight = function () {
  * Tree
  */
 
+// The class for every tree
+// Trees are made with:
+// `var MyTree = new RedBlackTree`
 function RedBlackTree() {
   this.root = null
 }
 
+// Replace one node with another
 RedBlackTree.prototype.replaceNode = function (original, replacement) {
   if (original.parent === null) {
-    original.tree.root = replacement
+    original.tree.root = replacement // special case for when you're pointing to the root node
   } else {
+    // simple binary node rotation
     if (original === original.parent.left) {
       original.parent.left = replacement
     } else {
@@ -70,152 +99,202 @@ RedBlackTree.prototype.replaceNode = function (original, replacement) {
   }
 }
 
+/*
+ * ADD (INSERT)
+ */
+
+// Add a node to the tree
+// balancing is done in balanceFromInsertionOf()
 RedBlackTree.prototype.add = function (key, value) {
-  if (this.root === null) {
+  if (this.root === null) { // special case for when the tree is completely empty
     this.root = new RedBlackNode(key, value)
-    return this
+    return this // return the tree to allow for chaining
   }
   
-  var node = new RedBlackNode(key, value)
-    , index = this.root
+  var node = new RedBlackNode(key, value) // cache the node that is to be added
+    , index = this.root // start at the root
     
+  // climb the tree, this is a simple binary search algorithm
+  // binary searching = using the key to speed up finding data in an object
+  // the red-black part is seen in balanceFromInsertionOf(node)
   while (index) {
-    if (key < index.key) {
+    if (key < index.key) { // binary search left, sorting by key
       if (index.left) index = index.left
       else {
-        index.left = node
+        index.left = node // set the node to the left branch if it doesn't exist
         break
       }
-    } else if (key > index.key) {
-      if (index.right) index = index.right
+    } else if (key > index.key) { // binary search right, sorting by key
+      if (index.right) index = index.right // if it does exist, move the index forward
       else {
-        index.right = node
+        index.right = node // set the node to the right branch if it doesn't exist
         break 
       }
-    } else break
+    } else break // just prevents a superfluous trip through the loop
   }
   
-  node.parent = index
-  node.tree = this
+  // two required properties of a node
+  node.parent = index // set node's parent to whichever node the while() loop finished on
+  node.tree = this // save the node's tree
   
-  return this.balanceFromInsertOf(node)
+  return this.balanceFromInsertionOf(node) // return the balanced tree to allow for chaining
 }
 
-RedBlackTree.prototype.balanceFromInsertOf = function (node) {
+// Re-balance the tree after inserting
+// The magic of the red-black tree
+RedBlackTree.prototype.balanceFromInsertionOf = function (node) {
+  // These are cached for speed, since there can be no ndoe udpates in this block
   var nodeParent = node.parent
     , nodeUncle = node.uncle
     , nodeGrandparent = node.grandparent()
     , nodeParentColor = nodeParent.color
     , nodeUncleColor = nodeUncle.color
   
-  if (!nodeParent) node.color = 'black'
-  else if (nodeParentColor == 'black') return this
-  else if (nodeUncle && nodeUncleColor === 'red') {
+  // red-black tree roots should always be black
+  if (!nodeParent) node.color = 'black' // special case for when you have the root of the tree
+  else if (nodeParentColor == 'black') return this // no need to balance if parent happens to be black
+  else if (nodeUncle && nodeUncleColor === 'red') { // Balancing black #1
     nodeParentColor = 'black'
     nodeUncleColor = 'black'
     nodeGrandparent.color = 'red'
     nodeGrandparent.balance()
-  } else {
+  } else { // Balancing block #2, no longer using cached variables to preserve node states
     if (node === node.parent.right && node.parent === node.grandparent.left) {
-      node.parent.rotateLeft()
+      node.parent.swapLeft() // rotate node with it's left-branching child
       node = node.left
     } else if (node === node.parent.left && node.parent === node.grandparent.right) {
-      node.parent.rotateRight()
+      node.parent.swapRight() // rotate node with it's right-branching child
       node = node.right
     }
     
+    // keep family up-to-date for all cases, regardless of control-flow results
     node.parent.color = 'black'
     node.grandparent.color = 'red'
     
+    // Balancing block #3, can occur simultaneous to block #2 and is opposite
     if (node === node.parent.left && node.parent === node.grandparent.left) {
-      node.rotateRight(node.grandparent)
+      node.swapRight(node.grandparent)
     } else if (node === node.parent.right && node.parent === node.grandparent.right) {
-      node.rotateLeft(node.grandparent)
+      node.swapLeft(node.grandparent)
     }
   }
   
-  return this
+  return this // return the tree to allow for chaining
 }
 
+/*
+ * GET
+ */
+
+// Return a value from the tree by its key
 RedBlackTree.prototype.get = function (key) {
-  var index = this.root
-  while (index) {
+  var index = this.root // start at the root
+  while (index) { // climb the tree using simple binary search
     if (key === index.key) return index.value
     else if (key < index.key) index = index.left
     else if (key > index.key) index = index.right
   }
   
-  return false
+  return false // makes this function useful in if-else statements
 }
 
+/*
+ * DELETE
+ */
+
+// Remove a key/value pair from the tree and re-balance
+// Balancing is done in balanceFromDeletionOf()
 RedBlackTree.prototype.delete = function (key) {
-  var node = this.root
-  while (node) {
+  var node = this.root // start at the root
+  while (node) { // climb the tree using simple binary search
     if (key === node.key) break
     else if (key < node.key) node = node.left
     else if (key > node.key) node = node.right
-  }
+  } // 'node' is now the node with the key
   
-  if (node.left !== null && node.right !== null) {
-    var pred = node.left;
-    while (pred.right !== null) pred = pred.right;
+  // Removes object from tree and re-arrange the children,
+  // since they no longer have a parent node. :-(
+  // IMPORTANT: this re-arranges nodes but DOES NOT RE-PAINT THEM
+  // Re-painting is still handled by balanceFromDeletionOf(node)
+  if (node.left !== null && node.right !== null) { // don't re-balance children unless it has children, of course
+    var pred = node.left // climg the left branch
+    while (pred.right !== null) pred = pred.right // switch to the right branch
     
-    node.key = pred.key;
-    node.value = pred.value;
-    node = pred;
+    // bye bye!
+    node.key = pred.key
+    node.value = pred.value
+    node = pred
   }
   
+  // find old child to re-balance from
   var child = (node.right === null) ? node.left : node.right
   if (node.color === 'black') {
-    node.color = child.color
-    this.balanceFromDeletionOf(node)
+    node.color = child.color // re-painting
+    this.balanceFromDeletionOf(node) // re-balance the tree from the deletion
   }
   
-  this.replaceNode(node, child)
-  this.root.color = 'black'
+  this.replaceNode(node, child) // swap the two nodes
+  this.root.color = 'black' // make sure the root color is still black,
+                            // since a deletion is the only thing that
+                            // could make it red
   
-  return this
+  return this // return the tree for chaining
 }
 
 RedBlackTree.prototype.balanceFromDeletionOf = function (node) {
+  // make sure we aren't at the top of the tree, first
+  // but even if we were, there's no special case for
+  // it because it can't have a parent that was deleted
   if (node.parent !== null) {
     var sibling = node.sibling()
     
     if (sibling && sibling.color === 'red') {
       node.parent.color = 'red'
       sibling.color = 'black'
-      if (node === node.parent.left) node.parent.rotateLeft()
-      else node.parent.rotateRight()
+      if (node === node.parent.left) node.parent.swapLeft()
+      else node.parent.swapRight()
     }
     
-    if (node.parent && node.parent.color === 'black' && sibling && sibling.color === 'black' && sibling.left.color === 'black' && sibling.right.color === 'black') {
+    // Special case, the else of this statement is balacning block #1
+    if (node.parent && node.parent.color === 'black' &&
+        sibling && sibling.color === 'black' &&
+        sibling.left.color === 'black' &&
+        sibling.right.color === 'black') {
       sibling.color = 'red'
-      this.balanceFromDeletionOf(node.parent)
-    } else {
-      if (node.parent && node.parent.color === 'red' && sibling && sibling.color === 'black' && sibling.left.color === 'black' && sibling.right.color === 'black') {
+      this.balanceFromDeletionOf(node.parent) // balance the parent instead if already black
+    } else { // Balancing block #1, always runs except for one case
+      if (node.parent && node.parent.color === 'red' &&
+          sibling && sibling.color === 'black' &&
+          sibling.left.color === 'black' &&
+          sibling.right.color === 'black') {
         sibling.color = 'red'
         node.parent.color = 'black'
       } else {
-        if (node.parent && node === node.parent.left && sibling && sibling.color === 'black' && sibling.left.color === 'red' && sibling.right.color === 'black') {
+        // Balancing block #2
+        if (node.parent && node === node.parent.left &&
+            sibling && sibling.color === 'black' &&
+            sibling.left.color === 'red' &&
+            sibling.right.color === 'black') {
           sibling.color = 'red'
           sibling.left.color = 'black'
-          sibling.rotateRight()
+          sibling.swapRight()
         } else if (node.parent && node === node.parent.right && sibling && sibling.color === 'black' && sibling.right.color === 'red' && sibling.left.color === 'black') {
           sibling.color = 'red'
           sibling.right.color = 'black'
-          sibling.rotateLeft()
+          sibling.swapLeft()
         }
         
+        // Balancing block #3 is actually more of a special case
         if (sibling) {
           sibling.color = node.parent.color
           node.parent.color = 'black'
           
           if (node === node.parent.left) {
             sibling.right.color = 'black'
-            node.parent.rotateLeft()
+            node.parent.swapLeft()
           } else {
             sibling.left.color = 'black'
-            node.parent.rotateRight()
+            node.parent.swapRight()
           }
         }
       }
@@ -223,6 +302,12 @@ RedBlackTree.prototype.balanceFromDeletionOf = function (node) {
   }
 }
 
+/*
+ * TRAVERSE
+ */
+
+// Runs an interator for each node in the tree
+// English: equivalent of _.map() in a JS utility library
 RedBlackTree.prototype.traverse = function (process) {
   this.root? !function over(node) {
     process.call(this, node)
@@ -231,53 +316,76 @@ RedBlackTree.prototype.traverse = function (process) {
   }(this.root) : false
 }
 
-RedBlackTree.prototype.contains = function (value) {
+/*
+ * CONTAINS
+ */
+
+// Returns true if node exists with key, false if not
+// Just a nice thing to have for any binary search tree
+RedBlackTree.prototype.contains = function (key) {
   var found = false
     , index = this._root
   
   while (!found && index) {
-    if (value < index.value) index = index.left
-    else if (value > index.value) index = index.right
+    if (key < index.key) index = index.left
+    else if (key > index.key) index = index.right
     else found = true
   }
   
   return found
 }
 
+/*
+ * SIZE
+ */
+
+// How...  many... nodes in my tree, node in my tree, nodes in my tree?
 RedBlackTree.prototype.size = function (value) {
   var length = 0
   this.traverse(function (node) { length++ })
   return length
 }
+/*
+ * TOARRAY
+ */
 
+// Maps each node in the tree to an array
+// Note that they are in order of their addition
 RedBlackTree.prototype.toArray = function () {
   var result = []
   this.traverse(function (node) { result.push(node.value) })
   return result
 }
 
+/*
+ * TOSTRING
+ */
+
+// Just a shortcut, no non-native logic here buddy
 RedBlackTree.prototype.toString = function () {
   return this.toArray().toString()
 }
 
 /* 
- * Tests
+ * Examples
  */
  
+// Let's make a tree!
 var MyTree = new RedBlackTree()
 
+// Add some stuff, delete some stuff
 MyTree
-  .add('z', 6)
-  .add('b', 12)
-  .add('c', 3)
-  .add('d', 5)
-  .add('e', 10)
-  .add('f', 32)
-  .delete('d')
-  .add('g', 234)
+  .add(1, 'foo')
+  .add(10, 'bar')
+  .add(3, 'raz')
+  .add(67, 'za')
 
+// Logs the color of every node we added
+// except for 'd', which was deleted :-)
+// IT'S RED/BLACK BALANCED!!!
 MyTree.traverse(function (node) {
   console.log(node.color)
 })
 
+// Log the entire tree with order of additon preserved!
 console.log(MyTree.toString())
